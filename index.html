@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Coach Summary</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Fraunces:wght@600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <main class="shell">
+      <section class="panel controls">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">GGRC Coach Summary</p>
+            <h2>Generate the coach table from the timesheet CSV.</h2>
+          </div>
+        </div>
+
+        <div class="field field-file">
+          <label for="csvFile">Timesheet CSV</label>
+          <input id="csvFile" type="file" accept=".csv">
+        </div>
+
+        <div class="grid">
+          <div class="field">
+            <label>Weeks to include</label>
+            <div id="weeksPicker" class="weeks-picker" aria-label="Weeks to include">
+              <label class="week-pill">
+                <input type="checkbox" value="1" checked>
+                <span>Week 1</span>
+              </label>
+              <label class="week-pill">
+                <input type="checkbox" value="2" checked>
+                <span>Week 2</span>
+              </label>
+              <label class="week-pill">
+                <input type="checkbox" value="3">
+                <span>Week 3</span>
+              </label>
+              <label class="week-pill">
+                <input type="checkbox" value="4">
+                <span>Week 4</span>
+              </label>
+            </div>
+            <p class="hint">Select the weeks you want included in the summary.</p>
+          </div>
+
+          <div class="field">
+            <label for="excludeInput">Exclude coaches</label>
+            <input id="excludeInput" type="text" placeholder="Rich">
+            <p class="hint">Optional. Separate multiple names with commas.</p>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button id="generateButton" class="button button-primary" type="button">Generate summary</button>
+          <button id="downloadButton" class="button button-secondary" type="button" disabled>Download CSV</button>
+        </div>
+
+        <p id="status" class="status">Choose the CSV file, then click Generate summary.</p>
+      </section>
+
+      <section class="panel output">
+        <div class="output-head">
+          <div>
+            <p class="eyebrow">Preview</p>
+            <h3>Coach summary table</h3>
+          </div>
+          <p id="summaryMeta" class="meta">No summary generated yet.</p>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Coach</th>
+                <th>Position-AgeGrp</th>
+                <th>Count</th>
+              </tr>
+            </thead>
+            <tbody id="summaryBody">
+              <tr class="empty-row">
+                <td colspan="3">No data yet.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
