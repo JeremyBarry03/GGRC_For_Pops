@@ -1,6 +1,8 @@
+const RATE_STORAGE_KEY = "coach-summary-rates";
 const state = {
   summaryRows: [],
   fileName: "",
+  rates: loadRates(),
 };
 const DEFAULT_NAME_CORRECTIONS = new Map([
   ["caitln", "Caitlin"],
@@ -26,7 +28,45 @@ const WEEK_WORDS = {
   eight: 8,
 };
 
+csvFileInput.addEventListener("change", async () => {
+  const file = csvFileInput.files[0];
+  if (!file) {
+    return;
+  }
+
+  try {
+    const rawText = await file.text();
+    const rows = parseCsv(rawText);
+    syncWeekOptions(extractWeeks(rows));
+    const refreshButton = getRefreshButton();
+    if (refreshButton) {
+      refreshButton.disabled = false;
+    }
+    setStatus("File loaded. Choose the weeks, then click Generate summary.");
+  } catch (error) {
+    setStatus(error.message || "Could not read the CSV file.");
+  }
+});
+
 generateButton.addEventListener("click", async () => {
+  await runSummary();
+});
+
+bindRefreshButton();
+
+weeksPicker.addEventListener("change", () => {
+  if (csvFileInput.files[0]) {
+    setStatus("Week changes are ready. Click Refresh preview.");
+  }
+});
+
+excludeInput.addEventListener("input", () => {
+  if (csvFileInput.files[0]) {
+    setStatus("Filter changes are ready. Click Refresh preview.");
+  }
+});
+
+async function runSummary() {
   const file = csvFileInput.files[0];
   if (!file) {
     setStatus("Choose a CSV file first.");
@@ -36,7 +76,6 @@ generateButton.addEventListener("click", async () => {
   try {
     const rawText = await file.text();
     const rows = parseCsv(rawText);
-    syncWeekOptions(extractWeeks(rows));
     const selectedWeeks = getSelectedWeeks();
     if (!selectedWeeks.size) {
       setStatus("Select at least one week.");
@@ -61,7 +100,7 @@ generateButton.addEventListener("click", async () => {
     renderSummary([]);
     setStatus(error.message || "Could not generate the summary.");
   }
-});
+}
 
 downloadButton.addEventListener("click", () => {
   if (!state.summaryRows.length) {
@@ -69,8 +108,13 @@ downloadButton.addEventListener("click", () => {
   }
 
   const csvText = toCsv([
-    ["Coach", "Position-AgeGrp", "Count"],
-    ...state.summaryRows.map((row) => [row.Coach, row["Position-AgeGrp"], row.Count ?? ""]),
+    ["Coach", "Position-AgeGrp", "Count", "Rate Per Session"],
+    ...state.summaryRows.map((row) => [
+      row.Coach,
+      row["Position-AgeGrp"],
+      row.Count ?? "",
+      row["Rate Per Session"] ?? "",
+    ]),
   ]);
 
   const blob = new Blob([csvText], { type: "text/csv;charset=utf-8;" });
@@ -82,6 +126,31 @@ downloadButton.addEventListener("click", () => {
   URL.revokeObjectURL(url);
 });
 
+summaryBody.addEventListener("input", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement) || !target.matches(".rate-input")) {
+    return;
+  }
+
+  const rowKey = target.dataset.rowKey;
+  if (!rowKey) {
+    return;
+  }
+
+  const cleanedValue = normalizeRate(target.value);
+  target.value = cleanedValue;
+  state.rates[rowKey] = cleanedValue;
+
+  for (const row of state.summaryRows) {
+    if (row.rowKey === rowKey) {
+      row["Rate Per Session"] = cleanedValue;
+      break;
+    }
+  }
+
+  saveRates(state.rates);
+});
+
 function setStatus(message) {
   statusNode.textContent = message;
 }
@@ -91,7 +160,7 @@ function renderSummary(rows) {
     summaryMetaNode.textContent = "No summary generated yet.";
     summaryBody.innerHTML = `
       <tr class="empty-row">
-        <td colspan="3">No data yet.</td>
+        <td colspan="4">No data yet.</td>
       </tr>
     `;
     return;
@@ -105,6 +174,19 @@ function renderSummary(rows) {
           <td>${escapeHtml(row.Coach)}</td>
           <td>${escapeHtml(row["Position-AgeGrp"])}</td>
           <td>${row.Count ?? ""}</td>
+          <td>
+            <div class="rate-cell">
+              <span class="rate-prefix">$</span>
+              <input
+                class="rate-input"
+                type="text"
+                inputmode="numeric"
+                placeholder="0"
+                value="${escapeAttribute(row["Rate Per Session"] ?? "")}"
+                data-row-key="${escapeAttribute(row.rowKey)}"
+              >
+            </div>
+          </td>
         </tr>
       `,
     )
@@ -176,18 +258,24 @@ function buildSummary(rows, options) {
   const summaryRows = [];
   for (const [countKey, count] of counts.entries()) {
     const [coach, positionAgeGroup] = countKey.split("|||");
+    const rowKey = `${coach}|||${positionAgeGroup}`;
     summaryRows.push({
       Coach: coach,
       "Position-AgeGrp": positionAgeGroup,
       Count: count,
+      "Rate Per Session": state.rates[rowKey] ?? "",
+      rowKey,
     });
   }
 
   for (const coach of [...excludedCoaches.values()].sort((left, right) => left.localeCompare(right))) {
+    const rowKey = `${coach}|||EXCLUDE`;
     summaryRows.push({
       Coach: coach,
       "Position-AgeGrp": "EXCLUDE",
       Count: null,
+      "Rate Per Session": state.rates[rowKey] ?? "",
+      rowKey,
     });
   }
 
@@ -218,6 +306,14 @@ function normalizeName(value, nameCorrections) {
   }
 
   return nameCorrections.get(key) || cleaned;
+}
+
+function normalizeRate(value) {
+  const cleaned = String(value ?? "").replace(/\D+/g, "");
+  if (!cleaned) {
+    return "";
+  }
+  return String(Number.parseInt(cleaned, 10));
 }
 
 function getAgeGroup(categoryValue) {
@@ -262,16 +358,49 @@ function syncWeekOptions(weeks) {
     return;
   }
 
+  const previousSelection = getSelectedWeeks();
+
   weeksPicker.innerHTML = weeks
     .map(
       (week) => `
         <label class="week-pill">
-          <input type="checkbox" value="${week}" ${week <= 2 ? "checked" : ""}>
+          <input type="checkbox" value="${week}" ${getWeekCheckedState(week, previousSelection)}>
           <span>Week ${week}</span>
         </label>
       `,
     )
-    .join("");
+    .join("")
+    .concat(`
+      <button id="refreshButton" class="refresh-wheel" type="button" aria-label="Refresh preview" title="Refresh preview" ${csvFileInput.files[0] ? "" : "disabled"}>
+        <span aria-hidden="true">&#8635;</span>
+      </button>
+    `);
+
+  bindRefreshButton();
+}
+
+function getWeekCheckedState(week, previousSelection) {
+  if (previousSelection.has(week)) {
+    return "checked";
+  }
+  if (previousSelection.size === 0 && week <= 2) {
+    return "checked";
+  }
+  return "";
+}
+
+function bindRefreshButton() {
+  const nextRefreshButton = getRefreshButton();
+  if (!nextRefreshButton) {
+    return;
+  }
+  nextRefreshButton.addEventListener("click", async () => {
+    await runSummary();
+  });
+}
+
+function getRefreshButton() {
+  return document.getElementById("refreshButton");
 }
 
 function getSelectedWeeks() {
@@ -368,4 +497,26 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
+}
+
+function escapeAttribute(value) {
+  return escapeHtml(value);
+}
+
+function loadRates() {
+  try {
+    const raw = window.localStorage.getItem(RATE_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveRates(rates) {
+  try {
+    window.localStorage.setItem(RATE_STORAGE_KEY, JSON.stringify(rates));
+  } catch {
+    return;
+  }
 }

@@ -13,10 +13,7 @@
     <main class="shell">
       <section class="panel controls">
         <div class="panel-head">
-          <div>
-            <p class="eyebrow">GGRC Coach Summary</p>
-            <h2>Generate the coach table from the timesheet CSV.</h2>
-          </div>
+          <p class="eyebrow">GGRC Coach Summary</p>
         </div>
 
         <div class="field field-file">
@@ -44,6 +41,9 @@
                 <input type="checkbox" value="4">
                 <span>Week 4</span>
               </label>
+              <button id="refreshButton" class="refresh-wheel" type="button" aria-label="Refresh preview" title="Refresh preview" disabled>
+                <span aria-hidden="true">&#8635;</span>
+              </button>
             </div>
             <p class="hint">Select the weeks you want included in the summary.</p>
           </div>
@@ -79,11 +79,12 @@
                 <th>Coach</th>
                 <th>Position-AgeGrp</th>
                 <th>Count</th>
+                <th>Rate Per Session</th>
               </tr>
             </thead>
             <tbody id="summaryBody">
               <tr class="empty-row">
-                <td colspan="3">No data yet.</td>
+                <td colspan="4">No data yet.</td>
               </tr>
             </tbody>
           </table>
